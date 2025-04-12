@@ -1,12 +1,12 @@
 {
   "name": "dalle-mcp-server",
   "version": "1.0.0",
-  "description": "OpenAI DALL-E 3 image generator MCP server for Cursor IDE",
+  "description": "OpenAI DALL-E 3 image generator MCP (Model Context Protocol) server for Cursor IDE",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "build": "mkdir -p dist && cp -r index.js imageUtils.js package.json public .env.example dist/",
+    "build": "mkdir -p dist && cp -r index.js imageUtils.js package.json public .env.example .cursor dist/",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -14,7 +14,8 @@
     "dall-e",
     "image-generation",
     "cursor",
-    "mcp"
+    "mcp",
+    "model-context-protocol"
   ],
   "author": "",
   "license": "ISC",

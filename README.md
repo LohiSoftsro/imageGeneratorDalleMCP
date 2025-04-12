@@ -1,6 +1,12 @@
 # DALL-E 3 MCP Server for Cursor
 
-This project provides an OpenAI DALL-E 3 image generator MCP (Model Code Proxy) server for the Cursor IDE. It allows the creation and management of DALL-E 3 generated images directly from the Cursor development environment.
+This project provides an OpenAI DALL-E 3 image generator MCP (Model Context Protocol) server for the Cursor IDE. It allows the creation and management of DALL-E 3 generated images directly from the Cursor development environment.
+
+## What is MCP?
+
+The Model Context Protocol (MCP) is an open protocol that standardizes how applications provide context and tools to LLMs. It acts as a plugin system for Cursor, allowing you to extend the AI Agent's capabilities by connecting it to various data sources and tools through standardized interfaces.
+
+This server implements MCP protocol to provide DALL-E 3 image generation capabilities directly in Cursor.
 
 ## Features
 
@@ -9,7 +15,7 @@ This project provides an OpenAI DALL-E 3 image generator MCP (Model Code Proxy) 
 - Automatically download and store images
 - Optimize images (resize, compress)
 - Simple web interface for testing
-- MCP-compatible endpoints for Cursor
+- MCP-compatible endpoints for Cursor integration
 
 ## Installation
 
@@ -81,48 +87,88 @@ pm2 save
 
 The server provides a simple web interface at http://localhost:3000 where you can test the image generation.
 
-### MCP Endpoints
+## MCP Protocol Implementation
 
-The server provides the following MCP endpoints:
+This server implements the MCP protocol using the SSE (Server-Sent Events) transport method. The following MCP endpoints are available:
 
-- `POST /mcp/generate-image`: Generate DALL-E 3 image
-- `POST /mcp/mcp_image_downloader_download_image`: Download image from URL
-- `POST /mcp/mcp_image_downloader_optimize_image`: Optimize image
+- `GET /mcp`: Returns the MCP server specification
+- `GET /mcp/sse`: SSE endpoint for real-time communication with Cursor
+- `POST /mcp/tools`: Endpoint for executing MCP tools
+
+### Available MCP Tools
+
+The server provides the following tools that can be used directly from Cursor:
+
+1. **generate_image**: Generate images using DALL-E 3
+   - Parameters: prompt, size (optional), quality (optional), n (optional)
+
+2. **download_image**: Download an image from a URL
+   - Parameters: url, outputPath
+
+3. **optimize_image**: Resize and optimize an image
+   - Parameters: inputPath, outputPath, width (optional), height (optional), quality (optional)
 
 ## Integration with Cursor IDE
 
-To integrate with Cursor IDE, follow these steps:
+To integrate this MCP server with Cursor, follow these steps:
 
-1. Start your server, ensure it's running at http://localhost:3000
+1. Start your MCP server (ensure it's running at http://localhost:3000)
 2. Open Cursor IDE
-3. Go to Settings > Extensions > MCP Server
-4. Enter the MCP Server URL: `http://localhost:3000/mcp`
-5. Save the settings
+3. Click on Settings (gear icon) in the bottom left
+4. Go to Extensions > MCP Server
+5. Add a new MCP server with the URL: `http://localhost:3000/mcp/sse`
+6. Save the settings
 
-After integration, you can access DALL-E image generation directly from Cursor using commands like:
+### Testing MCP Integration in Cursor
+
+Once the MCP server is integrated with Cursor, you can use the image generation capabilities directly in Cursor's AI chat by asking to generate an image. For example:
+
+1. Open the AI chat in Cursor
+2. Type a request such as: "Generate an image of a mountain landscape at sunset"
+3. Cursor will recognize this as an image generation request and use the MCP tool
+
+You can also explicitly request to use a specific tool:
 
 ```
-/generate-image "A beautiful sunset over mountains"
+Can you generate an image using the DALL-E generator? I want a picture of a futuristic city skyline.
 ```
 
-or by using the MCP tools in Cursor's command palette.
+### MCP Configuration File
 
-### Cursor Extension Commands
+Alternatively, you can create an MCP configuration file in your project or home directory:
 
-Once integrated, you can use commands like:
+For project-specific configuration:
+```json
+// .cursor/mcp.json
+{
+  "mcpServers": {
+    "dalle-image-generator": {
+      "url": "http://localhost:3000/mcp/sse"
+    }
+  }
+}
+```
 
-1. **Generate Image**: Creates a new DALL-E 3 image from a prompt
-2. **Download Image**: Downloads an image from a URL to a local path
-3. **Optimize Image**: Resizes and optimizes an existing image
+For global configuration:
+```json
+// ~/.cursor/mcp.json
+{
+  "mcpServers": {
+    "dalle-image-generator": {
+      "url": "http://localhost:3000/mcp/sse"
+    }
+  }
+}
+```
 
-### Troubleshooting Cursor Integration
+## Troubleshooting
 
-If the integration doesn't work:
-
-1. Ensure your server is running (check http://localhost:3000 in a browser)
-2. Verify you've entered the correct MCP URL in Cursor settings
-3. Check that your OpenAI API key is valid and has access to DALL-E
-4. Restart Cursor after setting up the MCP server
+- Make sure your OpenAI API key is valid and has access to DALL-E
+- Check that the MCP server is running and accessible at http://localhost:3000
+- Verify the SSE endpoint is correctly configured in Cursor
+- Check server logs for error messages
+- Restart Cursor after configuring the MCP server
+- If you're getting CORS errors, make sure the CORS settings in the server allow requests from Cursor
 
 ## Development
 
@@ -134,20 +180,13 @@ If the integration doesn't work:
 - `.env`: Environment variables
 - `package.json`: Project dependencies and scripts
 
-### Adding New Features
+### Adding New MCP Tools
 
-To add new image operations or features:
+To add new tools to the MCP server:
 
-1. Add new functions to `imageUtils.js`
-2. Create new endpoints in `index.js`
-3. Update the web interface if needed
-
-## Troubleshooting
-
-- Make sure your OpenAI API key is valid
-- Check server logs for error messages
-- Verify the server is running and accessible on the specified port
-- If image optimization fails, ensure the sharp library is properly installed
+1. Add the tool definition to the `mcpTools` array in `index.js`
+2. Create a handler function for the tool
+3. Add the tool routing in the `app.post('/mcp/tools')` endpoint
 
 ## License
 

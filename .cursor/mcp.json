@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "dalle-image-generator": {
+      "url": "http://localhost:3000/mcp/sse"
+    }
+  }
+} 
