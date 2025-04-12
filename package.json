@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "build": "mkdir -p dist && cp -r index.js imageUtils.js package.json public .env.example .cursor dist/",
+    "build": "mkdir -p build && cp -r index.js imageUtils.js package.json public .env.example run-server.js run-server.bat install.js static-setup.js build/ && cd build && npm install --production",
+    "setup": "node static-setup.js",
+    "install-mcp": "node install.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

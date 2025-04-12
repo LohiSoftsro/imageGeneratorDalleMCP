@@ -24,6 +24,18 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static('public'));
 
+// Error handling for JSON parsing
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    console.error('Bad JSON:', err.message);
+    return res.status(400).json({ 
+      error: 'Bad request - Invalid JSON',
+      details: err.message
+    });
+  }
+  next(err);
+});
+
 // Create images directory if it doesn't exist
 const imagesDir = path.join(__dirname, 'public', 'images');
 if (!fs.existsSync(imagesDir)) {
@@ -118,8 +130,11 @@ const mcpTools = [
   }
 ];
 
+// Get MCP base path from environment variable or use default
+const MCP_BASE_PATH = process.env.MCP_BASE_PATH || '';
+
 // MCP specifications endpoint
-app.get('/mcp', (req, res) => {
+app.get(`${MCP_BASE_PATH}/mcp`, (req, res) => {
   res.json({
     schemaVersion: 1,
     name: "DALL-E Image Generator",
@@ -133,7 +148,7 @@ app.get('/mcp', (req, res) => {
 });
 
 // MCP SSE endpoint for Cursor integration
-app.get('/mcp/sse', (req, res) => {
+app.get(`${MCP_BASE_PATH}/mcp/sse`, (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -148,10 +163,13 @@ app.get('/mcp/sse', (req, res) => {
 });
 
 // Tool endpoint for handling MCP tool executions
-app.post('/mcp/tools', async (req, res) => {
+app.post(`${MCP_BASE_PATH}/mcp/tools`, async (req, res) => {
   const { name, parameters, tool_call_id } = req.body;
 
   try {
+    // Log the tool call
+    console.log(`MCP tool call: ${name}`, JSON.stringify(parameters, null, 2));
+    
     let result;
 
     // Route to the appropriate tool handler
@@ -162,6 +180,7 @@ app.post('/mcp/tools', async (req, res) => {
     } else if (name === "optimize_image") {
       result = await handleOptimizeImage(parameters);
     } else {
+      console.error(`Unknown tool requested: ${name}`);
       return res.status(400).json({
         tool_call_id,
         status: "error",
@@ -170,6 +189,7 @@ app.post('/mcp/tools', async (req, res) => {
     }
 
     // Return successful result
+    console.log(`MCP tool ${name} completed successfully`);
     res.json({
       tool_call_id,
       status: "success",
@@ -177,10 +197,15 @@ app.post('/mcp/tools', async (req, res) => {
     });
   } catch (error) {
     console.error(`Error executing tool ${name}:`, error);
+    // Create a more descriptive error message
+    const errorMessage = error.message || 'Unknown error';
+    const errorDetails = error.stack ? error.stack.split('\n')[0] : '';
+    
     res.status(500).json({
       tool_call_id,
       status: "error",
-      error: error.message
+      error: errorMessage,
+      details: errorDetails
     });
   }
 });
@@ -272,7 +297,7 @@ async function handleOptimizeImage(parameters) {
 }
 
 // Legacy endpoints for backward compatibility
-app.post('/mcp/generate-image', async (req, res) => {
+app.post(`${MCP_BASE_PATH}/mcp/generate-image`, async (req, res) => {
   try {
     const result = await handleGenerateImage(req.body);
     res.json({ 
@@ -288,7 +313,7 @@ app.post('/mcp/generate-image', async (req, res) => {
   }
 });
 
-app.post('/mcp/mcp_image_downloader_download_image', async (req, res) => {
+app.post(`${MCP_BASE_PATH}/mcp/mcp_image_downloader_download_image`, async (req, res) => {
   try {
     const result = await handleDownloadImage(req.body);
     res.json({ 
@@ -304,7 +329,7 @@ app.post('/mcp/mcp_image_downloader_download_image', async (req, res) => {
   }
 });
 
-app.post('/mcp/mcp_image_downloader_optimize_image', async (req, res) => {
+app.post(`${MCP_BASE_PATH}/mcp/mcp_image_downloader_optimize_image`, async (req, res) => {
   try {
     const result = await handleOptimizeImage(req.body);
     res.json({ 
@@ -320,9 +345,50 @@ app.post('/mcp/mcp_image_downloader_optimize_image', async (req, res) => {
   }
 });
 
-// Start server
-app.listen(PORT, () => {
+// Graceful shutdown handler
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGUSR2', gracefulShutdown); // Nodemon restart signal
+
+function gracefulShutdown(signal) {
+  console.log(`\nReceived ${signal}. Graceful shutdown initiated.`);
+  
+  // Close server connections
+  if (server) {
+    console.log('Closing HTTP server...');
+    server.close(() => {
+      console.log('HTTP server closed.');
+      process.exit(0);
+    });
+    
+    // Force close after timeout
+    setTimeout(() => {
+      console.error('Could not close connections in time, forcefully shutting down');
+      process.exit(1);
+    }, 5000);
+  } else {
+    process.exit(0);
+  }
+}
+
+// Start server with port fallback
+const server = app.listen(PORT, () => {
+  const baseUrl = `http://localhost:${PORT}${MCP_BASE_PATH}`;
   console.log(`DALL-E MCP server running at http://localhost:${PORT}`);
-  console.log(`MCP endpoint available at http://localhost:${PORT}/mcp`);
-  console.log(`MCP SSE endpoint available at http://localhost:${PORT}/mcp/sse`);
+  console.log(`MCP endpoint available at ${baseUrl}/mcp`);
+  console.log(`MCP SSE endpoint available at ${baseUrl}/mcp/sse`);
+}).on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use. Trying alternative port...`);
+    // Try a different port
+    const alternativePort = parseInt(PORT) + 1;
+    const newServer = app.listen(alternativePort, () => {
+      const baseUrl = `http://localhost:${alternativePort}${MCP_BASE_PATH}`;
+      console.log(`DALL-E MCP server running at http://localhost:${alternativePort}`);
+      console.log(`MCP endpoint available at ${baseUrl}/mcp`);
+      console.log(`MCP SSE endpoint available at ${baseUrl}/mcp/sse`);
+    });
+  } else {
+    console.error('Server error:', err);
+  }
 }); 

@@ -17,7 +17,9 @@ This server implements MCP protocol to provide DALL-E 3 image generation capabil
 - Simple web interface for testing
 - MCP-compatible endpoints for Cursor integration
 
-## Installation
+## Quick Start
+
+### Installation
 
 1. Clone the repository:
 ```bash
@@ -35,65 +37,69 @@ npm install
 cp .env.example .env
 ```
 
-4. Get a valid OpenAI API key from the [OpenAI Platform](https://platform.openai.com/api-keys) and add it to your `.env` file.
-
-## Usage
-
-### Starting the Server
-
-For development mode (with auto-restart):
-```bash
-npm run dev
+4. Add your OpenAI API key to the `.env` file:
+```
+OPENAI_API_KEY=your_openai_api_key_here
 ```
 
-Or normal mode:
+### Setup Options
+
+You have two ways to integrate with Cursor:
+
+#### Option 1: Static Setup (Recommended)
+
+This option uses the stdio transport method, which is directly managed by Cursor without needing a running server:
+
 ```bash
-npm start
+npm run setup
 ```
 
-The server will be available at http://localhost:3000.
+This will:
+- Ask for your OpenAI API key
+- Create the required MCP configuration files
+- Set up everything for direct usage in Cursor, no server needed
 
-### Building for Production
+#### Option 2: Server-based Setup
 
-To build and run the server for production:
+If you prefer to run a separate server:
 
 ```bash
-# Install dependencies
-npm install
-
-# Set the environment variables
-cp .env.example .env
-# Edit .env with your OpenAI API key
+# Configure for Cursor
+npm run install-mcp
 
 # Start the server
-npm start
+node run-server.js
 ```
 
-For a more robust production setup, consider using a process manager like PM2:
+## Building for Distribution
+
+To build a standalone distribution:
 
 ```bash
-# Install PM2 globally
-npm install -g pm2
-
-# Start the server with PM2
-pm2 start index.js --name dalle-mcp-server
-
-# To ensure it starts on system reboot
-pm2 startup
-pm2 save
+npm run build
 ```
 
-### Web Interface
+This creates a `build` directory with everything needed to run the server. To use the build:
 
-The server provides a simple web interface at http://localhost:3000 where you can test the image generation.
+```bash
+cd build
+npm start
+# or
+node run-server.js
+```
 
 ## MCP Protocol Implementation
 
-This server implements the MCP protocol using the SSE (Server-Sent Events) transport method. The following MCP endpoints are available:
+This server implements the MCP protocol using both transport methods:
 
-- `GET /mcp`: Returns the MCP server specification
-- `GET /mcp/sse`: SSE endpoint for real-time communication with Cursor
-- `POST /mcp/tools`: Endpoint for executing MCP tools
+1. **SSE Transport**: For server-based integration
+   - `GET /mcp`: Returns the MCP server specification
+   - `GET /mcp/sse`: SSE endpoint for real-time communication with Cursor
+   - `POST /mcp/tools`: Endpoint for executing MCP tools
+
+2. **stdio Transport**: For direct integration without a server
+   - Cursor manages the process directly
+   - No need to keep a server running
 
 ### Available MCP Tools
 
@@ -108,50 +114,55 @@ The server provides the following tools that can be used directly from Cursor:
 3. **optimize_image**: Resize and optimize an image
    - Parameters: inputPath, outputPath, width (optional), height (optional), quality (optional)
 
-## Integration with Cursor IDE
+## Using in Cursor
 
-To integrate this MCP server with Cursor, follow these steps:
+Once configured using either method, you can use DALL-E directly in Cursor:
 
-1. Start your MCP server (ensure it's running at http://localhost:3000)
-2. Open Cursor IDE
-3. Click on Settings (gear icon) in the bottom left
-4. Go to Extensions > MCP Server
-5. Add a new MCP server with the URL: `http://localhost:3000/mcp/sse`
-6. Save the settings
+1. Open Cursor IDE
+2. In the AI chat, ask to generate an image like:
+   ```
+   Generate an image of a mountain landscape at sunset
+   ```
 
-### Testing MCP Integration in Cursor
+3. Cursor will use the MCP tools to generate the image
 
-Once the MCP server is integrated with Cursor, you can use the image generation capabilities directly in Cursor's AI chat by asking to generate an image. For example:
+## Advanced Configuration
 
-1. Open the AI chat in Cursor
-2. Type a request such as: "Generate an image of a mountain landscape at sunset"
-3. Cursor will recognize this as an image generation request and use the MCP tool
+### Server-based Config
 
-You can also explicitly request to use a specific tool:
+#### Custom Port
 
-```
-Can you generate an image using the DALL-E generator? I want a picture of a futuristic city skyline.
-```
+You can specify a custom port by:
+- Setting the `PORT` environment variable in .env
+- Passing it as a parameter to run-server.js: `node run-server.js 3001`
 
-### MCP Configuration File
+#### Custom Base Path
 
-Alternatively, you can create an MCP configuration file in your project or home directory:
+If you're running behind a proxy, you can specify a base path:
+- Passing it as a second parameter: `node run-server.js 3000 /api`
+- This makes endpoints available at `/api/mcp/...` instead of `/mcp/...`
 
-For project-specific configuration:
+### Manual Cursor Configuration
+
+#### For stdio Transport (No Server)
+
 ```json
-// .cursor/mcp.json
 {
   "mcpServers": {
-    "dalle-image-generator": {
-      "url": "http://localhost:3000/mcp/sse"
+    "dalle-mcp-generator": {
+      "command": "node",
+      "args": ["/path/to/index.js"],
+      "env": {
+        "OPENAI_API_KEY": "your_api_key_here"
+      }
     }
   }
 }
 ```
 
-For global configuration:
+#### For SSE Transport (With Server)
+
 ```json
-// ~/.cursor/mcp.json
 {
   "mcpServers": {
     "dalle-image-generator": {
@@ -164,29 +175,10 @@ For global configuration:
 ## Troubleshooting
 
 - Make sure your OpenAI API key is valid and has access to DALL-E
-- Check that the MCP server is running and accessible at http://localhost:3000
-- Verify the SSE endpoint is correctly configured in Cursor
-- Check server logs for error messages
-- Restart Cursor after configuring the MCP server
-- If you're getting CORS errors, make sure the CORS settings in the server allow requests from Cursor
-
-## Development
-
-### Project Structure
-
-- `index.js`: Main server file with Express routes and MCP endpoints
-- `imageUtils.js`: Image downloading and optimization utilities
-- `public/`: Static files and the web interface
-- `.env`: Environment variables
-- `package.json`: Project dependencies and scripts
-
-### Adding New MCP Tools
-
-To add new tools to the MCP server:
-
-1. Add the tool definition to the `mcpTools` array in `index.js`
-2. Create a handler function for the tool
-3. Add the tool routing in the `app.post('/mcp/tools')` endpoint
+- For server mode: Verify the server is running and accessible at the specified URL
+- For stdio mode: Ensure the path to index.js in the configuration is correct
+- Check Cursor's logs for MCP-related errors
+- If port 3000 is already in use, the server will automatically try port 3001
 
 ## License
 
