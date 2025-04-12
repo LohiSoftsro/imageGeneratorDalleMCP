@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DALL-E 3 MCP Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .loading {
+            display: none;
+            margin-top: 20px;
+        }
+        .result {
+            margin-top: 20px;
+            display: none;
+        }
+        .error {
+            color: red;
+            margin-top: 20px;
+            display: none;
+        }
+        .generated-image {
+            margin-top: 20px;
+            max-width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .revised-prompt {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <h1>DALL-E 3 Image Generator Test</h1>
+    
+    <div class="form-group">
+        <label for="prompt">Prompt:</label>
+        <textarea id="prompt" placeholder="Write a detailed description of the image you want to generate..."></textarea>
+    </div>
+    
+    <div class="form-group">
+        <label for="size">Size:</label>
+        <select id="size">
+            <option value="1024x1024">1024x1024</option>
+            <option value="1792x1024">1792x1024</option>
+            <option value="1024x1792">1024x1792</option>
+        </select>
+    </div>
+    
+    <div class="form-group">
+        <label for="quality">Quality:</label>
+        <select id="quality">
+            <option value="standard">Standard</option>
+            <option value="hd">HD</option>
+        </select>
+    </div>
+    
+    <button id="generate">Generate</button>
+    
+    <div id="loading" class="loading">
+        Generating image... This may take up to 30 seconds.
+    </div>
+    
+    <div id="error" class="error"></div>
+    
+    <div id="result" class="result">
+        <h2>Generated Image:</h2>
+        <img id="generatedImage" class="generated-image" src="" alt="Generated Image">
+        <div id="revisedPrompt" class="revised-prompt"></div>
+    </div>
+    
+    <script>
+        document.getElementById('generate').addEventListener('click', async () => {
+            const prompt = document.getElementById('prompt').value;
+            const size = document.getElementById('size').value;
+            const quality = document.getElementById('quality').value;
+            
+            if (!prompt) {
+                document.getElementById('error').textContent = 'Please provide a prompt!';
+                document.getElementById('error').style.display = 'block';
+                return;
+            }
+            
+            // Update UI elements
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('result').style.display = 'none';
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('generate').disabled = true;
+            
+            try {
+                const response = await fetch('/mcp/generate-image', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        prompt,
+                        size,
+                        quality,
+                        n: 1
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || 'Unknown error occurred');
+                }
+                
+                if (result.success && result.images && result.images.length > 0) {
+                    const image = result.images[0];
+                    
+                    // Check if there's a saved path or just URL
+                    const imageSource = image.saved_path || image.url;
+                    
+                    document.getElementById('generatedImage').src = imageSource;
+                    document.getElementById('revisedPrompt').textContent = `Revised prompt: ${image.revised_prompt}`;
+                    document.getElementById('result').style.display = 'block';
+                } else {
+                    throw new Error('Failed to generate image');
+                }
+            } catch (error) {
+                document.getElementById('error').textContent = `Error: ${error.message}`;
+                document.getElementById('error').style.display = 'block';
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('generate').disabled = false;
+            }
+        });
+    </script>
+</body>
+</html> 
